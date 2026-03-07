@@ -2,7 +2,7 @@ import Pyro5.api
 import redis
 
 @Pyro5.api.expose
-class TicketServer ():
+class TicketServer:
     
     limite_entradas = 20000
 
