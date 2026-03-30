@@ -1,6 +1,7 @@
 import Pyro5.api
 import sys
 import redis
+import argparse
 
 @Pyro5.api.expose
 class Worker:
@@ -24,15 +25,14 @@ class Worker:
 
 if __name__ == "__main__":
     
-    if len(sys.argv) != 2:
-        print(f"Usage: python3 {sys.argv[0]} <port>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Load Balancer")
+    #parser.add_argument("-H", "--host", type=str, default="localhost", help="Specifies to use the given host (default: %(default)s)")
+    parser.add_argument("-p", "--port", type=int, required=True, help="Specifies to use the given port")
+    args = parser.parse_args()
 
-    port    = int(sys.argv[1])
-    
-    daemon  = Pyro5.api.Daemon(port=port)
+    daemon = Pyro5.api.Daemon(host=args.host,port=args.port)
 
-    uri     = daemon.register(Worker(), objectId="worker")
+    uri    = daemon.register(Worker(), objectId="worker")
 
     print("[\033[32m+\033[0m] - Worker running...")
     print("[\033[32m+\033[0m] - NS Entry :", "None")

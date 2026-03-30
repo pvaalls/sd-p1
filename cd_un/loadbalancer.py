@@ -2,6 +2,7 @@ import Pyro5.api
 import itertools
 import threading
 import sys
+import argparse
 
 Pyro5.config.SERVERTYPE = "thread"
 Pyro5.config.THREADPOOL_SIZE = 50
@@ -36,15 +37,16 @@ class LoadBalancer:
 
 if __name__ == "__main__":
 
-    if len(sys.argv) != 2:
-        print(f"Usage: python3 {sys.argv[0]} <port>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Load Balancer")
+    parser.add_argument("-n", "--ns", type=str, default="localhost", help="Specifies to use the given nameserver (default: %(default)s)")
+    parser.add_argument("-H", "--host", type=str, default="localhost", help="Specifies to use the given host (default: %(default)s)")
+    parser.add_argument("-p", "--port", type=int, default=9000, help="Specifies to use the given port (default: %(default)s)")
+    args = parser.parse_args()
 
-    port    = int(sys.argv[1])
     lb_name = "ticket.server.unnumbered"
     
-    daemon  = Pyro5.api.Daemon(port=port)
-    ns      = Pyro5.api.locate_ns()
+    daemon  = Pyro5.api.Daemon(host=args.host,port=args.port)
+    ns      = Pyro5.api.locate_ns(host=args.host)
 
     uri     = daemon.register(LoadBalancer(), objectId="loadbalancer")
     ns.register(lb_name, uri)
