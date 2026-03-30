@@ -3,28 +3,33 @@ import itertools
 import threading
 import sys
 
+Pyro5.config.SERVERTYPE = "thread"
+Pyro5.config.THREADPOOL_SIZE = 50
+
 # URIs de los workers (objectId = "worker")
 worker_uris = [
     "PYRO:worker@localhost:9001",
     "PYRO:worker@localhost:9002",
 ]
 
-# Round-robin seguro
-cycle = itertools.cycle(worker_uris)
-lock  = threading.Lock()
+counter = itertools.count()
+thread_local = threading.local()
+
+def get_proxy(uri):
+    if not hasattr(thread_local, "proxies"):
+        # Inicializar proxies por hilo
+        thread_local.proxies = {u: Pyro5.api.Proxy(u) for u in worker_uris}
+    return thread_local.proxies[uri]
 
 @Pyro5.api.expose
 class LoadBalancer:
 
     def comprar_entrada(self, client_id, request_id):
         print(f"{client_id} -> {request_id}")
-        # Selección segura entre threads
-        with lock:
-            uri = next(cycle)
+        uri = worker_uris[next(counter) % len(worker_uris)]
         try:
-            # Crear proxy por cada llamada (thread-safe)
-            with Pyro5.api.Proxy(uri) as worker:
-                return worker.comprar_entrada(client_id, request_id)
+            worker = get_proxy(uri)
+            return worker.comprar_entrada(client_id, request_id)
         except Exception as e:
             print(e)
             return False

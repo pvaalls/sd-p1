@@ -20,7 +20,7 @@ def main ():
                     
                     # Cridem al mètode remot (com si fos local)
                     resultat = ticket_server.comprar_entrada(client_id, request_id)
-                
+                    print(resultat)
         end_time = time.time()
         print(f"Benchmark finalitzat en {end_time - start_time:.4f} segons.")
 
