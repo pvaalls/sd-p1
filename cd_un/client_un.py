@@ -4,7 +4,7 @@ import time
 
 def main ():
     try:
-        with open("benchmark_unnumbered_20000.txt", 'r') as f:
+        with open("../data/benchmark_unnumbered_20000.txt", 'r') as f:
             lines = f.readlines()
 
         start_time = time.time()
