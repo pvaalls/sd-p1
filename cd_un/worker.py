@@ -23,19 +23,21 @@ class Worker:
             print("Error en Worker:", e)
             return False
 
-if __name__ == "__main__":
+def main():
     
     parser = argparse.ArgumentParser(description="Load Balancer")
-    #parser.add_argument("-H", "--host", type=str, default="localhost", help="Specifies to use the given host (default: %(default)s)")
     parser.add_argument("-p", "--port", type=int, required=True, help="Specifies to use the given port")
     args = parser.parse_args()
 
-    daemon = Pyro5.api.Daemon(host=args.host,port=args.port)
+    daemon = Pyro5.api.Daemon(host="localhost",port=args.port)
 
     uri    = daemon.register(Worker(), objectId="worker")
 
     print("[\033[32m+\033[0m] - Worker running...")
-    print("[\033[32m+\033[0m] - NS Entry :", "None")
-    print("[\033[32m+\033[0m] -      URI :", uri)
+    print("[\033[32m+\033[0m] - NS Entry :", "\033[32mNone\033[0m")
+    print("[\033[32m+\033[0m] -      URI :", f"\033[32m{uri}\033[0m")
 
     daemon.requestLoop()
+
+if __name__ == "__main__":
+    main()

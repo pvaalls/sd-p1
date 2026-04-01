@@ -20,7 +20,7 @@ def main():
     try:
         with open("../data/benchmark_unnumbered_20000.txt", 'r') as f:
             lines = f.readlines()
-
+            
         start_time = time.time()
 
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
