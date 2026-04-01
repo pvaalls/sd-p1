@@ -20,6 +20,14 @@ def get_proxy(uri):
     if not hasattr(thread_local, "proxies"):
         # Inicializar proxies por hilo
         thread_local.proxies = {u: Pyro5.api.Proxy(u) for u in worker_uris}
+
+        thread_local.proxies = {}
+
+        for uri in worker_uris:
+            proxy = Pyro5.api.Proxy(uri)
+            proxy._pyroBind()          # 🔥 abre conexión aquí            
+            thread_local.proxies[u] = proxy
+            
     return thread_local.proxies[uri]
 
 @Pyro5.api.expose
@@ -36,7 +44,7 @@ class LoadBalancer:
             return False
 
 def main():
-    
+
     parser = argparse.ArgumentParser(description="Load Balancer")
     parser.add_argument("-n", "--ns", type=str, default="localhost", help="Specifies to use the given nameserver (default: %(default)s)")
     parser.add_argument("-H", "--host", type=str, default="localhost", help="Specifies to use the given host (default: %(default)s)")

@@ -7,6 +7,7 @@ def comprar_entradas ( uri ):
     entradas_compradas = 0
     # Busquem el servei pel nom que hem registrat abans
     with Pyro5.api.Proxy(uri) as ticket_server:
+        ticket_server._pyroBind()
         with open("../data/benchmark_unnumbered_20000.txt", 'r') as f:
             for request in f:
                 # Format del fitxer: BUY <client_id> <request_id>
