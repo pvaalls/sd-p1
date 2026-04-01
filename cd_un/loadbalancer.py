@@ -26,8 +26,8 @@ def get_proxy(uri):
         for uri in worker_uris:
             proxy = Pyro5.api.Proxy(uri)
             proxy._pyroBind()          # 🔥 abre conexión aquí            
-            thread_local.proxies[u] = proxy
-            
+            thread_local.proxies[uri] = proxy
+
     return thread_local.proxies[uri]
 
 @Pyro5.api.expose
