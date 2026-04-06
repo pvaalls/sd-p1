@@ -46,8 +46,8 @@ class LoadBalancer:
                 return None
             return self.worker_uris[next(counter) % len(self.worker_uris)]
 
-    def comprar_entrada(self, client_id, request_id):
-        print(f"{client_id} -> {request_id}")
+    def comprar_entrada(self, client_id, seat_id, request_id):
+        print(f"{client_id} -> {seat_id} -> {request_id}")
 
         uri = self.get_next_worker()
         if uri is None:
@@ -56,7 +56,7 @@ class LoadBalancer:
 
         try:
             worker = get_proxy(uri)
-            return worker.comprar_entrada(client_id, request_id)
+            return worker.comprar_entrada(client_id, seat_id, request_id)
         except Exception as e:
             print("Worker caído:", e)
             self.unregister_worker(uri)  # 🔥 auto-limpieza
@@ -64,13 +64,13 @@ class LoadBalancer:
 
 def main():
 
-    parser = argparse.ArgumentParser(description="Load Balancer")
+    parser = argparse.ArgumentParser(description="Load Balancer (Numbered Tickets)")
     parser.add_argument("-n", "--ns", type=str, default="localhost", help="Specifies to use the given nameserver (default: %(default)s)")
     parser.add_argument("-H", "--host", type=str, default="localhost", help="Specifies to use the given host (default: %(default)s)")
     parser.add_argument("-p", "--port", type=int, default=9000, help="Specifies to use the given port (default: %(default)s)")
     args = parser.parse_args()
 
-    lb_name = "ticket.server.unnumbered"
+    lb_name = "ticket.server.numbered"
     
     daemon  = Pyro5.api.Daemon(host=args.host,port=args.port)
     ns      = Pyro5.api.locate_ns(host=args.ns)

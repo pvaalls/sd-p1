@@ -64,7 +64,7 @@ class LoadBalancer:
 
 def main():
 
-    parser = argparse.ArgumentParser(description="Load Balancer")
+    parser = argparse.ArgumentParser(description="Load Balancer (Unnumbered Tickets)")
     parser.add_argument("-n", "--ns", type=str, default="localhost", help="Specifies to use the given nameserver (default: %(default)s)")
     parser.add_argument("-H", "--host", type=str, default="localhost", help="Specifies to use the given host (default: %(default)s)")
     parser.add_argument("-p", "--port", type=int, default=9000, help="Specifies to use the given port (default: %(default)s)")

@@ -25,7 +25,7 @@ def comprar_entradas ( uri ):
 
 def main ():
 
-    parser = argparse.ArgumentParser(description="Load Balancer")
+    parser = argparse.ArgumentParser(description="Client for Unnumbered Tickets")
     parser.add_argument("-n", "--ns", type=str, default="localhost", help="Specifies to use the given nameserver (default: %(default)s)")
     args = parser.parse_args()
 

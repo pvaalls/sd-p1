@@ -8,16 +8,17 @@ def comprar_entradas ( uri ):
     # Busquem el servei pel nom que hem registrat abans
     with Pyro5.api.Proxy(uri) as ticket_server:
         ticket_server._pyroBind()
-        with open("../data/benchmark_unnumbered_20000.txt", 'r') as f:
+        with open("../data/benchmark_numbered_60000.txt", 'r') as f:
             for request in f:
                 # Format del fitxer: BUY <client_id> <request_id>
                 parts = request.strip().split()
-                if len(parts) == 3 and parts[0] == 'BUY':
+                if len(parts) == 4 and parts[0] == 'BUY':
                     client_id  = parts[1]
-                    request_id = parts[2]
+                    seat_id    = parts[2]
+                    request_id = parts[3]
                     
                     # Cridem al mètode remot (com si fos local)
-                    resultat = ticket_server.comprar_entrada(client_id, request_id)
+                    resultat = ticket_server.comprar_entrada(client_id, seat_id, request_id)
                     if resultat:
                         entradas_compradas += 1
 
@@ -25,12 +26,12 @@ def comprar_entradas ( uri ):
 
 def main ():
 
-    parser = argparse.ArgumentParser(description="Load Balancer")
+    parser = argparse.ArgumentParser(description="Client for Numbered Tickets")
     parser.add_argument("-n", "--ns", type=str, default="localhost", help="Specifies to use the given nameserver (default: %(default)s)")
     args = parser.parse_args()
 
     try:
-        server = "ticket.server.unnumbered"
+        server = "ticket.server.numbered"
 
         print(f"[\033[32m+\033[0m] - Looking for Name Server at :", f"\033[32m{args.ns}:9090\033[0m")
         ns = Pyro5.api.locate_ns(host=args.ns, port=9090)

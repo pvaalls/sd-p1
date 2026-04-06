@@ -7,19 +7,16 @@ import argparse
 @Pyro5.api.expose
 class Worker:
 
-    limite_entradas = 20000
-
     def __init__(self):
         # Conexión a Redis
         self.redisserver = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
         # Solo inicializa si no existe
         self.redisserver.setnx("entrades_venudes", 0)
 
-    def comprar_entrada(self, client_id, request_id):
-        print(f"{client_id} -> {request_id}")
+    def comprar_entrada(self, client_id, seat_id, request_id):
+        print(f"{client_id} -> {seat_id} -> {request_id}")
         try:
-            entradas = self.redisserver.incr("entrades_venudes")
-            return entradas <= self.limite_entradas
+            return self.redisserver.hsetnx("entradas_vendidas_num", seat_id, client_id)
         except Exception as e:
             print("Error en Worker:", e)
             return False
@@ -40,7 +37,7 @@ def register_to_lb(uri, ns_host, lb_ns_entry="ticket.server.unnumbered"):
 
 def main():
     
-    parser = argparse.ArgumentParser(description="Worker")
+    parser = argparse.ArgumentParser(description="Worker (Numbered Tickets)")
     parser.add_argument("-p", "--port", type=int, required=True, help="Specifies to use the given port")
     parser.add_argument("-n", "--ns", type=str, default="localhost", help="Specifies to use the given nameserver (default: %(default)s)")
     args = parser.parse_args()
