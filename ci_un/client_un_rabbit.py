@@ -4,7 +4,7 @@ import json
 import time
 
 #config
-RABBIT_HOST = 'localhost'
+RABBIT_HOST = '192.168.10.209'
 QUEUE_NAME = 'cues_compra'
 FITXER_BENCHMARK = "benchmark_unnumbered_20000.txt"
 

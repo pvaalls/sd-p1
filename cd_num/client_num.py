@@ -8,7 +8,8 @@ def comprar_entradas ( uri ):
     # Busquem el servei pel nom que hem registrat abans
     with Pyro5.api.Proxy(uri) as ticket_server:
         ticket_server._pyroBind()
-        with open("../data/benchmark_numbered_60000.txt", 'r') as f:
+        #with open("../data/benchmark_numbered_20000.txt", 'r') as f:
+        with open("../data/benchmark_hotspot_60000.txt", 'r') as f:
             for request in f:
                 # Format del fitxer: BUY <client_id> <request_id>
                 parts = request.strip().split()
