@@ -11,7 +11,7 @@ class Worker:
         # Conexión a Redis
         self.redisserver = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
         # Solo inicializa si no existe
-        self.redisserver.setnx("entrades_venudes", 0)
+        self.redisserver.setnx("entradas_vendidas_num", 0)
 
     def comprar_entrada(self, client_id, seat_id, request_id):
         print(f"{client_id} -> {seat_id} -> {request_id}")
@@ -37,12 +37,13 @@ def register_to_lb(uri, ns_host, lb_ns_entry="ticket.server.unnumbered"):
 
 def main():
     
-    parser = argparse.ArgumentParser(description="Worker (Numbered Tickets)")
-    parser.add_argument("-p", "--port", type=int, required=True, help="Specifies to use the given port")
+    parser = argparse.ArgumentParser(description="Worker (Unnumbered Tickets)")
     parser.add_argument("-n", "--ns", type=str, default="localhost", help="Specifies to use the given nameserver (default: %(default)s)")
+    parser.add_argument("-H", "--host", type=str, default="localhost", help="Specifies to use the given host (default: %(default)s)")
+    parser.add_argument("-p", "--port", type=int, required=True, help="Specifies to use the given port")
     args = parser.parse_args()
 
-    daemon = Pyro5.api.Daemon(host="localhost",port=args.port)
+    daemon = Pyro5.api.Daemon(host=args.host,port=args.port)
 
     uri    = daemon.register(Worker(), objectId="worker")
 

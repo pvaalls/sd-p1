@@ -18,7 +18,7 @@ class Worker:
     def comprar_entrada(self, client_id, request_id):
         print(f"{client_id} -> {request_id}")
         try:
-            entradas = self.redisserver.incr("entrades_venudes")
+            entradas = self.redisserver.incr("entradas_vendidas_un")
             return entradas <= self.limite_entradas
         except Exception as e:
             print("Error en Worker:", e)
@@ -41,11 +41,12 @@ def register_to_lb(uri, ns_host, lb_ns_entry="ticket.server.unnumbered"):
 def main():
     
     parser = argparse.ArgumentParser(description="Worker (Unnumbered Tickets)")
-    parser.add_argument("-p", "--port", type=int, required=True, help="Specifies to use the given port")
     parser.add_argument("-n", "--ns", type=str, default="localhost", help="Specifies to use the given nameserver (default: %(default)s)")
+    parser.add_argument("-H", "--host", type=str, default="localhost", help="Specifies to use the given host (default: %(default)s)")
+    parser.add_argument("-p", "--port", type=int, required=True, help="Specifies to use the given port")
     args = parser.parse_args()
 
-    daemon = Pyro5.api.Daemon(host="localhost",port=args.port)
+    daemon = Pyro5.api.Daemon(host=args.host,port=args.port)
 
     uri    = daemon.register(Worker(), objectId="worker")
 
