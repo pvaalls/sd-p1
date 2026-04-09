@@ -41,9 +41,10 @@ def main ():
 
         print(f"[\033[32m+\033[0m] - Got :", f"\033[32m{uri}\033[0m")
         
-        start_time = time.time()
 
         input(f"[\033[32m+\033[0m] - Press any key to start...")
+        start_time = time.time()
+        
         entradas = comprar_entradas( uri )
 
         end_time = time.time()
