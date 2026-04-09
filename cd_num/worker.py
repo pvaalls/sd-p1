@@ -7,14 +7,19 @@ import argparse
 @Pyro5.api.expose
 class Worker:
 
-    def __init__(self):
+    def __init__(self, verbose):
+        if verbose:
+            self.vprint = print
+        else:
+            self.vprint = lambda *args, **kwargs: None
+
         # Conexión a Redis
         self.redisserver = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
         # Solo inicializa si no existe
         self.redisserver.setnx("entradas_vendidas_num", 0)
 
     def comprar_entrada(self, client_id, seat_id, request_id):
-        print(f"{client_id} -> {seat_id} -> {request_id}")
+        self.vprint(f"{client_id} -> {seat_id} -> {request_id}")
         try:
             return self.redisserver.hsetnx("entradas_vendidas_num", seat_id, client_id)
         except Exception as e:
@@ -38,6 +43,7 @@ def register_to_lb(uri, ns_host, lb_ns_entry="ticket.server.unnumbered"):
 def main():
     
     parser = argparse.ArgumentParser(description="Worker (Unnumbered Tickets)")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Specifies to use the verbose mode")
     parser.add_argument("-n", "--ns", type=str, default="localhost", help="Specifies to use the given nameserver (default: %(default)s)")
     parser.add_argument("-H", "--host", type=str, default="localhost", help="Specifies to use the given host (default: %(default)s)")
     parser.add_argument("-p", "--port", type=int, required=True, help="Specifies to use the given port")
@@ -45,7 +51,7 @@ def main():
 
     daemon = Pyro5.api.Daemon(host=args.host,port=args.port)
 
-    uri    = daemon.register(Worker(), objectId="worker")
+    uri    = daemon.register(Worker(args.verbose), objectId="worker")
 
     print("[\033[32m+\033[0m] - Worker running...")
     print("[\033[32m+\033[0m] - NS Entry :", "\033[32mNone\033[0m")
@@ -54,6 +60,7 @@ def main():
     lb = register_to_lb(uri, args.ns)
     if lb is None:
         sys.exit(1)
+        
     def shutdown(signum, frame):
         print("[\033[33m!\033[0m] - Aborting...")
 

@@ -24,7 +24,12 @@ def get_proxy(uri):
 @Pyro5.api.expose
 class LoadBalancer:
 
-    def __init__(self):
+    def __init__(self, verbose):
+        if verbose:
+            self.vprint = print
+        else:
+            self.vprint = lambda *args, **kwargs: None
+
         self.worker_uris = []
         self.lock = threading.Lock()
 
@@ -47,7 +52,7 @@ class LoadBalancer:
             return self.worker_uris[next(counter) % len(self.worker_uris)]
 
     def comprar_entrada(self, client_id, request_id):
-        print(f"{client_id} -> {request_id}")
+        self.vprint(f"{client_id} -> {request_id}")
 
         uri = self.get_next_worker()
         if uri is None:
@@ -65,6 +70,7 @@ class LoadBalancer:
 def main():
 
     parser = argparse.ArgumentParser(description="Load Balancer (Unnumbered Tickets)")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Specifies to use the verbose mode")
     parser.add_argument("-n", "--ns", type=str, default="localhost", help="Specifies to use the given nameserver (default: %(default)s)")
     parser.add_argument("-H", "--host", type=str, default="localhost", help="Specifies to use the given host (default: %(default)s)")
     parser.add_argument("-p", "--port", type=int, default=9000, help="Specifies to use the given port (default: %(default)s)")
@@ -75,7 +81,7 @@ def main():
     daemon  = Pyro5.api.Daemon(host=args.host,port=args.port)
     ns      = Pyro5.api.locate_ns(host=args.ns)
 
-    uri     = daemon.register(LoadBalancer(), objectId="loadbalancer")
+    uri     = daemon.register(LoadBalancer(args.verbose), objectId="loadbalancer")
     ns.register(lb_name, uri)
 
     print("[\033[32m+\033[0m] - LoadBalancer running...")
