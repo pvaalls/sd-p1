@@ -4,9 +4,9 @@ import json
 import time
 
 #config
-RABBIT_HOST = '192.168.10.209'
+RABBIT_HOST = 'localhost'
 QUEUE_NAME = 'cues_compra'
-FITXER_BENCHMARK = "benchmark_unnumbered_20000.txt"
+FITXER_BENCHMARK = "../data/benchmark_unnumbered_20000.txt"
 
 class TicketClientRPC:
     def __init__(self):
@@ -78,7 +78,7 @@ def main():
             client_rpc.enviar_peticio(client_id, request_id)
 
     print("Peticions enviades. Esperant respostes...")
-    
+
     # Bucle d'espera
     while client_rpc.respostes_rebudes < client_rpc.total_peticions:
         client_rpc.connection.process_data_events(time_limit=1)
@@ -86,7 +86,7 @@ def main():
         print(f"\rProgrés: {client_rpc.respostes_rebudes} / {client_rpc.total_peticions} respostes rebudes...", end="")
 
     print("\n")
-   
+
     end_time = time.time()
     temps_total = end_time - start_time
     throughput = client_rpc.total_peticions / temps_total if temps_total > 0 else 0
