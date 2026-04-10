@@ -2,13 +2,14 @@ import Pyro5.api
 import Pyro5.errors
 import time
 import argparse
+from pathlib import Path
 
-def comprar_entradas ( uri ):
+def comprar_entradas ( uri, file ):
     entradas_compradas = 0
     # Busquem el servei pel nom que hem registrat abans
     with Pyro5.api.Proxy(uri) as ticket_server:
         ticket_server._pyroBind()
-        with open("../data/benchmark_unnumbered_20000.txt", 'r') as f:
+        with open(file, 'r') as f:
             for request in f:
                 # Format del fitxer: BUY <client_id> <request_id>
                 parts = request.strip().split()
@@ -27,6 +28,8 @@ def main ():
 
     parser = argparse.ArgumentParser(description="Client for Unnumbered Tickets")
     parser.add_argument("-n", "--ns", type=str, default="localhost", help="Specifies to use the given nameserver (default: %(default)s)")
+    request_file = Path(__file__).resolve().parent / "../data/benchmark_unnumbered_20000.txt"
+    parser.add_argument("-f", "--file", type=str, default=request_file, help="Specifies to use the given request file (default: %(default)s)")
     args = parser.parse_args()
 
     try:
@@ -44,12 +47,13 @@ def main ():
         input(f"[\033[32m+\033[0m] - Press any key to start...")
         start_time = time.time()
         
-        entradas = comprar_entradas( uri )
+        entradas = comprar_entradas( uri, args.file )
 
         end_time = time.time()
         
-        print(f" Benchmark finalizado en : {end_time - start_time:.4f} segons.")
-        print(f"      Entradas compradas : {entradas}")
+        print()
+        print(f"[\033[32m+\033[0m] - Benchmark finalizado en : {end_time - start_time:.4f} segons.")
+        print(f"[\033[32m+\033[0m] -      Entradas compradas : {entradas}")
 
     except Pyro5.errors.NamingError:
         print("Error: No es troba el servidor. Assegura't que el Name Server i el Servidor corren.")
