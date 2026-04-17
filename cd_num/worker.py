@@ -14,14 +14,14 @@ class Worker:
             self.vprint = lambda *args, **kwargs: None
 
         # Conexión a Redis
-        self.redisserver = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
+        self.redis_server = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
         # Solo inicializa si no existe
-        self.redisserver.setnx("entradas_vendidas_num", 0)
+        self.redis_server.setnx("entradas_vendidas_num", 0)
 
     def comprar_entrada(self, client_id, seat_id, request_id):
         self.vprint(f"{client_id} -> {seat_id} -> {request_id}")
         try:
-            return self.redisserver.hsetnx("entradas_vendidas_num", seat_id, client_id)
+            return self.redis_server.hsetnx("entradas_vendidas_num", seat_id, client_id)
         except Exception as e:
             print("Error en Worker:", e)
             return False
@@ -41,7 +41,7 @@ def register_to_lb(uri, ns_host, lb_ns_entry="ticket.server.unnumbered"):
         return None
 
 def main():
-    
+
     parser = argparse.ArgumentParser(description="Worker (Unnumbered Tickets)")
     parser.add_argument("-v", "--verbose", action="store_true", help="Specifies to use the verbose mode")
     parser.add_argument("-n", "--ns", type=str, default="localhost", help="Specifies to use the given nameserver (default: %(default)s)")
@@ -60,7 +60,7 @@ def main():
     lb = register_to_lb(uri, args.ns)
     if lb is None:
         sys.exit(1)
-        
+
     def shutdown(signum, frame):
         print("[\033[33m!\033[0m] - Aborting...")
 
