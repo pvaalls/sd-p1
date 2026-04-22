@@ -87,12 +87,14 @@ def main():
 
         print(f"[+] Resolviendo: {server}")
         uri = ns.lookup(server)
+        print(f"[+] URI: {uri}")
+        print(f"[+] Threads: {args.threads}")
 
         with Pyro5.api.Proxy(uri) as loadbalancer:
             worker_uri = loadbalancer.get_worker()
+            if worker_uri is None:
+                exit("no worker")
 
-        print(f"[+] URI: {uri}")
-        print(f"[+] Threads: {args.threads}")
         print(f"[+] Worker URI: {worker_uri}")
         print()
 

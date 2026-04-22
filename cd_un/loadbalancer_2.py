@@ -22,7 +22,7 @@ class LoadBalancer:
     def get_worker(self):
         if not self.workers:
             return None
-        return self.workers[next(counter) % len(self.workers)]
+        return self.workers[next(self.counter) % len(self.workers)]
 
 def main():
 
@@ -37,7 +37,7 @@ def main():
     daemon  = Pyro5.api.Daemon(host=args.host,port=args.port)
     ns      = Pyro5.api.locate_ns(host=args.ns)
 
-    lb_uri  = daemon.register(LoadBalancer(args.verbose), objectId="loadbalancer")
+    lb_uri  = daemon.register(LoadBalancer(), objectId="loadbalancer")
     ns.register(lb_name, lb_uri)
 
     print("[\033[32m+\033[0m] - LoadBalancer running...")
