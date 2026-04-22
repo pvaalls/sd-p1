@@ -1,7 +1,6 @@
 import Pyro5.api
 import itertools
 import threading
-import sys
 import argparse
 
 Pyro5.config.SERVERTYPE = "thread"
@@ -77,7 +76,7 @@ def main():
     args = parser.parse_args()
 
     lb_name = "ticket.server.unnumbered"
-    
+
     daemon  = Pyro5.api.Daemon(host=args.host,port=args.port)
     ns      = Pyro5.api.locate_ns(host=args.ns)
 
