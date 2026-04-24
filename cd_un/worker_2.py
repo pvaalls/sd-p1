@@ -3,27 +3,49 @@ import sys
 import signal
 import redis
 import argparse
+import time        # <--- AÑADIDO
+import threading   # <--- AÑADIDO
 
 @Pyro5.api.expose
 class Worker:
 
     limite_entradas = 20000
+    redis_key = "entradas_vendidas_un"
 
     def __init__(self, verbose, redis_host):
         self.vprint = print if verbose else lambda *args, **kwargs: None
         # Conexión a Redis
         self.redis_server = redis.Redis(host=redis_host, port=6379, db=0, decode_responses=True)
         # Solo inicializa si no existe
-        self.redis_server.setnx("entradas_vendidas_un", 0)
+        self.redis_server.setnx(self.redis_key, 0)
+
+        # --- AÑADIDO: ESTADÍSTICAS ---
+        self.stats_lock         = threading.Lock()
+        self.total_service_time = 0.0
+        self.total_requests     = 0
 
     def comprar_entrada(self, client_id, request_id):
         self.vprint(f"{client_id} -> {request_id}")
+        start_time = time.time()
         try:
-            entradas = self.redis_server.incr("entradas_vendidas_un")
+            entradas = self.redis_server.incr(self.redis_key)
+            # --- AÑADIDO: REGISTRO DE TIEMPO ---
+            duration = time.time() - start_time
+            with self.stats_lock:
+                self.total_service_time += duration
+                self.total_requests += 1
+
             return entradas <= self.limite_entradas
         except Exception as e:
             print("Error en Worker:", e)
             return False
+
+    # --- AÑADIDO: MÉTODO DE STATS ---
+    def get_stats(self):
+        with self.stats_lock:
+            if self.total_requests == 0:
+                return 0, 0.0
+            return self.total_requests, self.total_service_time
 
 def register_to_lb(uri, ns_host, lb_ns_entry="ticket.server.unnumbered"):
     try:
