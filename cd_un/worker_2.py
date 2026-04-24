@@ -45,7 +45,7 @@ class Worker:
         with self.stats_lock:
             if self.total_requests == 0:
                 return 0, 0.0
-            return self.total_requests, self.total_service_time
+            return self.total_requests, self.total_service_time / self.total_requests
 
 def register_to_lb(uri, ns_host, lb_ns_entry="ticket.server.unnumbered"):
     try:

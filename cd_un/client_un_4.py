@@ -5,7 +5,8 @@ import argparse
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-def procesar_request(uri, request):
+# --- MODIFICADO: Ahora recibe el proxy ya abierto ---
+def procesar_request(proxy, request):
     parts = request.strip().split()
     if len(parts) != 3 or parts[0] != 'BUY':
         return False, 0.0
@@ -16,14 +17,24 @@ def procesar_request(uri, request):
     start = time.time()
 
     try:
-        with Pyro5.api.Proxy(uri) as ticket_server:
-            ticket_server._pyroBind()
-            result = ticket_server.comprar_entrada(client_id, request_id)
+        # --- MODIFICADO: Usamos el proxy existente en lugar de crear uno nuevo ---
+        result = proxy.comprar_entrada(client_id, request_id)
     except Exception:
         return False, 0.0
 
     latency = time.time() - start
     return result, latency
+
+# --- NUEVA FUNCIÓN: Envuelve la lógica de cada hilo ---
+def worker_thread_logic(uri, requests_chunk):
+    results = []
+    # Se crea un proxy por hilo (permanece abierto para todas sus peticiones)
+    with Pyro5.api.Proxy(uri) as proxy:
+        proxy._pyroBind()
+        for r in requests_chunk:
+            res, lat = procesar_request(proxy, r)
+            results.append((res, lat))
+    return results
 
 def comprar_entradas(uri, file, num_threads):
     with open(file, 'r') as f:
@@ -33,17 +44,23 @@ def comprar_entradas(uri, file, num_threads):
     entradas_compradas = 0
     latencias = []
 
+    # Dividimos las peticiones en grupos para los hilos
+    chunk_size = (total_requests // num_threads) + 1
+    chunks = [requests[i:i + chunk_size] for i in range(0, total_requests, chunk_size)]
+
     start_time = time.time()
 
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
-        futures = [executor.submit(procesar_request, uri, r) for r in requests]
+        # --- MODIFICADO: Cada hilo procesa un grupo de peticiones con un solo Proxy ---
+        futures = [executor.submit(worker_thread_logic, uri, chunk) for chunk in chunks]
 
         for future in as_completed(futures):
-            result, latency = future.result()
-            if result:
-                entradas_compradas += 1
-            if latency > 0:
-                latencias.append(latency)
+            batch_results = future.result()
+            for result, latency in batch_results:
+                if result:
+                    entradas_compradas += 1
+                if latency > 0:
+                    latencias.append(latency)
 
     end_time = time.time()
 
@@ -69,34 +86,33 @@ def main():
     args = parser.parse_args()
 
     try:
-        server = "ticket.server.unnumbered"
+        server_name = "ticket.server.unnumbered"
 
-        print(f"[+] NameServer: {args.ns}:9090")
+        print(f"[+] NameServer  : {args.ns}:9090")
         ns = Pyro5.api.locate_ns(host=args.ns, port=9090)
+        print(f"[+] Resolviendo : {server_name}")
+        server_uri = ns.lookup(server_name)
+        print(f"[+] Server URI  : {server_uri}")
+        print(f"[+] Threads     : {args.threads}")
 
-        print(f"[+] Resolviendo: {server}")
-        uri = ns.lookup(server)
-        print(f"[+] URI: {uri}")
-        print(f"[+] Threads: {args.threads}")
-
-        with Pyro5.api.Proxy(uri) as loadbalancer:
-            worker_uri = loadbalancer.get_worker()
+        with Pyro5.api.Proxy(server_uri) as server:
+            worker_uri = server.get_worker()
             if worker_uri is None:
                 exit("no worker")
 
-        print(f"[+] Worker URI: {worker_uri}")
+        print(f"[+] Worker URI  : {worker_uri}")
         print()
 
         input("[+] Pulsa ENTER para empezar...")
 
         stats = comprar_entradas(worker_uri, args.file, args.threads)
 
-        # --- AÑADIDO: OBTENER STATS DEL SERVER ---
+        # --- OBTENER STATS DEL SERVER ---
         try:
             with Pyro5.api.Proxy(worker_uri) as worker:
                 srv_reqs, srv_avg_time = worker.get_stats()
         except:
-            srv_avg_time = 0
+            srv_reqs, srv_avg_time = 0, 0
 
         print("\n=== RESULTADOS: Cliente ===")
         print(f"Total requests       : {stats['total_requests']}")
@@ -106,7 +122,7 @@ def main():
         print(f"Latencia media (CLT) : {stats['avg_latency']:.6f}")
         print("\n=== RESULTADOS: Servidor ===")
         print(f"Total requests       : {srv_reqs}")
-        print(f"Total Service time   : {srv_avg_time:.6f}")
+        print(f"Service time promedio: {srv_avg_time:.6f}") # Corregido nombre para claridad
 
     except Pyro5.errors.NamingError:
         print("Error: No se encuentra el servidor.")
