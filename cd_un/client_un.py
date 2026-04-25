@@ -121,14 +121,21 @@ def main():
         input("[+] Pulsa ENTER para empezar...")
 
         # Pasamos ambos URIs para la lógica de reintento
-        stats = comprar_entradas(server_uri, worker_uri, args.file, args.threads)
+        stats_cliente = comprar_entradas(server_uri, worker_uri, args.file, args.threads)
+        #stats_worker  = 
+
+        with Pyro5.api.Proxy(worker_uri) as server:
+            stats_worker = server.get_stats()
 
         print("\n=== RESULTADOS: Cliente ===")
-        print(f"Total requests       : {stats['total_requests']}")
-        print(f"Entradas compradas   : {stats['entradas']}")
-        print(f"Tiempo total (s)     : {stats['total_time']:.4f}")
-        print(f"Throughput (req/s)   : {stats['throughput']:.2f}")
-        print(f"Latencia media (CLT) : {stats['avg_latency']:.6f}")
+        print(f"Total requests       : {stats_cliente['total_requests']}")
+        print(f"Entradas compradas   : {stats_cliente['entradas']}")
+        print(f"Tiempo total (s)     : {stats_cliente['total_time']:.4f}")
+        print(f"Throughput (req/s)   : {stats_cliente['throughput']:.2f}")
+        print(f"Latencia media (CLT) : {stats_cliente['avg_latency']:.6f}")
+        print("\n=== RESULTADOS: Servidor ===")
+        print(f"Total requests       : {stats_worker['total_requests']}")
+        print(f"Tiempo total (s)     : {stats_worker['total_service_time']:.4f}")
 
     except Pyro5.errors.NamingError:
         print("Error: No se encuentra el servidor NameServer.")
