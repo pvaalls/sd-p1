@@ -5,7 +5,6 @@ import argparse
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# --- MODIFICADO: Ahora recibe el proxy ya abierto ---
 def procesar_request(proxy, request):
     parts = request.strip().split()
     if len(parts) != 3 or parts[0] != 'BUY':
@@ -17,26 +16,46 @@ def procesar_request(proxy, request):
     start = time.time()
 
     try:
-        # --- MODIFICADO: Usamos el proxy existente en lugar de crear uno nuevo ---
+        # El proxy realiza la llamada RMI
         result = proxy.comprar_entrada(client_id, request_id)
     except Exception:
-        return False, 0.0
+        # Si falla aquí, lanzamos la excepción para que el hilo la gestione
+        raise
 
     latency = time.time() - start
     return result, latency
 
-# --- NUEVA FUNCIÓN: Envuelve la lógica de cada hilo ---
-def worker_thread_logic(uri, requests_chunk):
+# --- MODIFICADO: Ahora gestiona la reconexión si falla el worker ---
+def worker_thread_logic(server_uri, worker_uri, requests_chunk):
     results = []
-    # Se crea un proxy por hilo (permanece abierto para todas sus peticiones)
-    with Pyro5.api.Proxy(uri) as proxy:
-        proxy._pyroBind()
-        for r in requests_chunk:
-            res, lat = procesar_request(proxy, r)
-            results.append((res, lat))
+    current_worker_uri = worker_uri
+
+    # Usamos un índice para saber por qué petición íbamos si falla
+    i = 0
+    while i < len(requests_chunk):
+        try:
+            with Pyro5.api.Proxy(current_worker_uri) as proxy:
+                proxy._pyroBind()
+                while i < len(requests_chunk):
+                    res, lat = procesar_request(proxy, requests_chunk[i])
+                    results.append((res, lat))
+                    i += 1
+        except Exception as e:
+            print(f"[!] Worker fallido ({current_worker_uri}). Solicitando uno nuevo...")
+            try:
+                # Pedimos al servidor principal un nuevo worker
+                with Pyro5.api.Proxy(server_uri) as server:
+                    current_worker_uri = server.get_worker()
+                if current_worker_uri is None:
+                    print("[-] No hay workers disponibles.")
+                    break
+                print(f"[+] Nuevo Worker obtenido: {current_worker_uri}")
+            except Exception:
+                print("[-] Error crítico: No se puede contactar con el Servidor Principal.")
+                break
     return results
 
-def comprar_entradas(uri, file, num_threads):
+def comprar_entradas(server_uri, worker_uri, file, num_threads):
     with open(file, 'r') as f:
         requests = f.readlines()
 
@@ -44,15 +63,14 @@ def comprar_entradas(uri, file, num_threads):
     entradas_compradas = 0
     latencias = []
 
-    # Dividimos las peticiones en grupos para los hilos
     chunk_size = (total_requests // num_threads) + 1
     chunks = [requests[i:i + chunk_size] for i in range(0, total_requests, chunk_size)]
 
     start_time = time.time()
 
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
-        # --- MODIFICADO: Cada hilo procesa un grupo de peticiones con un solo Proxy ---
-        futures = [executor.submit(worker_thread_logic, uri, chunk) for chunk in chunks]
+        # --- MODIFICADO: Pasamos el server_uri para permitir recuperación ---
+        futures = [executor.submit(worker_thread_logic, server_uri, worker_uri, chunk) for chunk in chunks]
 
         for future in as_completed(futures):
             batch_results = future.result()
@@ -77,11 +95,10 @@ def comprar_entradas(uri, file, num_threads):
     }
 
 def main():
-
     parser = argparse.ArgumentParser(description="Benchmark concurrente Pyro5")
-    parser.add_argument("-n", "--ns", type=str, default="localhost", help="NameServer host (default: %(default)s)")
+    parser.add_argument("-n", "--ns", type=str, default="localhost", help="NameServer host")
     request_file = Path(__file__).resolve().parent / "../data/benchmark_unnumbered_20000.txt"
-    parser.add_argument("-f", "--file", type=str, default=request_file, help="Request File")
+    parser.add_argument("-f", "--file", type=str, default=str(request_file), help="Request File")
     parser.add_argument("-t", "--threads", type=int, default=10, help="Number of Threads")
     args = parser.parse_args()
 
@@ -90,8 +107,8 @@ def main():
 
         print(f"[+] NameServer  : {args.ns}:9090")
         ns = Pyro5.api.locate_ns(host=args.ns, port=9090)
-        print(f"[+] Resolviendo : {server_name}")
         server_uri = ns.lookup(server_name)
+
         print(f"[+] Server URI  : {server_uri}")
         print(f"[+] Threads     : {args.threads}")
 
@@ -101,18 +118,10 @@ def main():
                 exit("no worker")
 
         print(f"[+] Worker URI  : {worker_uri}")
-        print()
-
         input("[+] Pulsa ENTER para empezar...")
 
-        stats = comprar_entradas(worker_uri, args.file, args.threads)
-
-        # --- OBTENER STATS DEL SERVER ---
-        try:
-            with Pyro5.api.Proxy(worker_uri) as worker:
-                srv_reqs, srv_avg_time = worker.get_stats()
-        except:
-            srv_reqs, srv_avg_time = 0, 0
+        # Pasamos ambos URIs para la lógica de reintento
+        stats = comprar_entradas(server_uri, worker_uri, args.file, args.threads)
 
         print("\n=== RESULTADOS: Cliente ===")
         print(f"Total requests       : {stats['total_requests']}")
@@ -120,12 +129,9 @@ def main():
         print(f"Tiempo total (s)     : {stats['total_time']:.4f}")
         print(f"Throughput (req/s)   : {stats['throughput']:.2f}")
         print(f"Latencia media (CLT) : {stats['avg_latency']:.6f}")
-        print("\n=== RESULTADOS: Servidor ===")
-        print(f"Total requests       : {srv_reqs}")
-        print(f"Service time promedio: {srv_avg_time:.6f}") # Corregido nombre para claridad
 
     except Pyro5.errors.NamingError:
-        print("Error: No se encuentra el servidor.")
+        print("Error: No se encuentra el servidor NameServer.")
     except Exception as e:
         print(f"Error inesperado: {e}")
 
