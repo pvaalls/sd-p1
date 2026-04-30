@@ -17,33 +17,33 @@ class Worker:
         self.redis_server = redis.Redis(host=redis_host, port=6379, db=0, decode_responses=True)
         self.redis_server.setnx(self.redis_key, 0)
 
-        # --- ESTADÍSTICAS MEJORADAS ---
         self.stats_lock = threading.Lock()
         self.total_requests = 0
-        # Guardaremos una lista de tuplas (inicio, fin)
+        # Guardaremos una lista de tuplas de las peticiones (inicio, fin)
         self.intervalos = []
 
     def comprar_entrada(self, client_id, request_id):
         self.vprint(f"{client_id} -> {request_id}")
-        start_time = time.perf_counter()
+
+        inicio = time.perf_counter()
 
         try:
             entradas = self.redis_server.incr(self.redis_key)
-            result = entradas <= self.limite_entradas
+            result   = entradas <= self.limite_entradas
         except Exception as e:
             print("Error en Worker:", e)
             result = False
 
-        end_time = time.perf_counter()
+        fin = time.perf_counter()
 
-        # Guardamos el intervalo específico de esta petición
+        # Guardar Intervalo de esta Petición
         with self.stats_lock:
             self.total_requests += 1
-            self.intervalos.append((start_time, end_time))
+            self.intervalos.append((inicio, fin))
 
         return result
 
-    def _calcular_tiempo_real_sin_solapamiento(self):
+    def _tiempo_real_sin_solapamiento(self):
         """Algoritmo de unión de intervalos"""
         if not self.intervalos:
             return 0.0
@@ -73,12 +73,15 @@ class Worker:
 
     def get_stats(self):
         with self.stats_lock:
-            real_time = self._calcular_tiempo_real_sin_solapamiento()
+            real_time = self._tiempo_real_sin_solapamiento()
             return {
                 "total_requests": self.total_requests,
-                "total_service_time": real_time,
-                "total_intervals_recorded": len(self.intervalos)
+                "total_service_time": self._tiempo_real_sin_solapamiento(),
             }
+
+    def reset_stats(self):
+        with self.stats_lock:
+            self.intervalos = []
 
 def register_to_lb(uri, ns_host, lb_ns_entry="ticket.server.unnumbered"):
     try:

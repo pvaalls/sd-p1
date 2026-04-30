@@ -3,8 +3,8 @@ import sys
 import signal
 import redis
 import argparse
-import time        # <--- AÑADIDO
-import threading   # <--- AÑADIDO
+import time        
+import threading   
 
 @Pyro5.api.expose
 class Worker:

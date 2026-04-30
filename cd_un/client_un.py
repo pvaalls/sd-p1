@@ -100,6 +100,7 @@ def main():
     request_file = Path(__file__).resolve().parent / "../data/benchmark_unnumbered_20000.txt"
     parser.add_argument("-f", "--file", type=str, default=str(request_file), help="Request File")
     parser.add_argument("-t", "--threads", type=int, default=10, help="Number of Threads")
+    parser.add_argument("-s", "--stats", action="store_true", help="Specifies to get the worker stats")
     parser.add_argument("-r", "--reset", action="store_true", help="Specifies to reset the time counter on worker")
     args = parser.parse_args()
 
@@ -124,21 +125,24 @@ def main():
         # Pasamos ambos URIs para la lógica de reintento
         stats_cliente = comprar_entradas(server_uri, worker_uri, args.file, args.threads)
 
-
         print("\n=== RESULTADOS: Cliente ===")
-        print(f"Total requests       : {stats_cliente['total_requests']}")
-        print(f"Entradas compradas   : {stats_cliente['entradas']}")
+        print(f"Total Peticiones     : {stats_cliente['total_requests']}")
+        print(f"Entradas Compradas   : {stats_cliente['entradas']}")
         print(f"Tiempo total (s)     : {stats_cliente['total_time']:.4f}")
-        print(f"Throughput (req/s)   : {stats_cliente['throughput']:.2f}")
-        print(f"Latencia media (CLT) : {stats_cliente['avg_latency']:.6f}")
+        print(f"Throughput (pet/s)   : {stats_cliente['throughput']:.2f}")
+        print(f"Latencia media       : {stats_cliente['avg_latency']:.6f}")
 
-        if args.reset:
+        if args.stats:
             with Pyro5.api.Proxy(worker_uri) as server:
                 stats_worker = server.get_stats()
+
             print("\n=== RESULTADOS: Servidor ===")
             print(f"Total requests       : {stats_worker['total_requests']}")
             print(f"Tiempo total (s)     : {stats_worker['total_service_time']:.4f}")
-
+        if args.reset:
+            with Pyro5.api.Proxy(worker_uri) as server:
+                server.reset_stats()
+            print("Stats de Worker reseteadas")
     except Pyro5.errors.NamingError:
         print("Error: No se encuentra el servidor NameServer.")
     except Exception as e:
