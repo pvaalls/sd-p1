@@ -102,6 +102,7 @@ def main():
     parser.add_argument("-t", "--threads", type=int, default=10, help="Number of Threads")
     parser.add_argument("-s", "--stats", action="store_true", help="Specifies to get the worker stats")
     parser.add_argument("-r", "--reset", action="store_true", help="Specifies to reset the worker stats at the end")
+    parser.add_argument("-a", "--avoid", action="store_true", help="Specifies to avoid key pressing to continue")
     args = parser.parse_args()
 
     try:
@@ -120,7 +121,9 @@ def main():
                 exit("no worker")
 
         print(f"[+] Worker URI  : {worker_uri}")
-        input("[+] Pulsa ENTER para empezar...")
+
+        if not args.avoid:
+            input("[+] Pulsa ENTER para empezar...")
 
         # Pasamos ambos URIs para la lógica de reintento
         stats_cliente = comprar_entradas(server_uri, worker_uri, args.file, args.threads)
