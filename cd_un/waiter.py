@@ -9,4 +9,4 @@ print("Esperando señal...")
 for message in pubsub.listen():
     if message["type"] == "message":
         if message["data"] == "START":
-            
+            pass

@@ -136,6 +136,7 @@ def main():
         print(f"Latencia media       : {stats_cliente['avg_latency']:.6f}")
 
         if args.stats:
+            input("Stats...")
             with Pyro5.api.Proxy(worker_uri) as server:
                 stats_worker = server.get_stats()
 
@@ -143,6 +144,7 @@ def main():
             print(f"Total requests       : {stats_worker['total_requests']}")
             print(f"Tiempo total (s)     : {stats_worker['total_service_time']:.4f}")
         if args.reset:
+            input("Reset...")
             with Pyro5.api.Proxy(worker_uri) as server:
                 server.reset_stats()
             print("Stats de Worker reseteadas")
