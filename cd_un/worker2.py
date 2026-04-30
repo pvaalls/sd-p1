@@ -81,6 +81,7 @@ class Worker:
 
     def reset_stats(self):
         with self.stats_lock:
+            self.total_requests = 0
             self.intervalos = []
 
 def register_to_lb(uri, ns_host, lb_ns_entry="ticket.server.unnumbered"):

@@ -101,7 +101,7 @@ def main():
     parser.add_argument("-f", "--file", type=str, default=str(request_file), help="Request File")
     parser.add_argument("-t", "--threads", type=int, default=10, help="Number of Threads")
     parser.add_argument("-s", "--stats", action="store_true", help="Specifies to get the worker stats")
-    parser.add_argument("-r", "--reset", action="store_true", help="Specifies to reset the time counter on worker")
+    parser.add_argument("-r", "--reset", action="store_true", help="Specifies to reset the worker stats at the end")
     args = parser.parse_args()
 
     try:
