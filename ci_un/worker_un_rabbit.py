@@ -1,70 +1,97 @@
 import pika
-import redis
 import json
+import time
+import psycopg2
 
-#config
 RABBIT_HOST = 'localhost'
-REDIS_HOST = 'localhost'
 QUEUE_NAME = 'cues_compra'
+METRICS_QUEUE = 'cues_metriques'
 LIMIT_ENTRADES = 20000
 
-#conec redis
-redisserver = redis.Redis(host=REDIS_HOST, port=6379, db=0, decode_responses=True)
+DB_HOST = "localhost"
+DB_NAME = "concerts"
+DB_USER = "postgres"
+DB_PASS = "admin"
+
+# obrim la conexio una sola vegada
+try:
+    db_conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS)
+
+    # Desactivem l'escriptura síncrona al disc només per a aquesta connexió
+    cursor_config = db_conn.cursor()
+    cursor_config.execute("SET synchronous_commit = OFF;")
+    cursor_config.close()
+
+except Exception as e:
+    print(f"Error fatal connectant a PostgreSQL: {e}")
+    exit(1)
 
 def on_request(ch, method, props, body):
-    """
-    Funció callback que s'executa cada cop que arriba un missatge a la cua.
-    """
-    #Deserialitzar el missatge del client
     dades = json.loads(body)
     client_id = dades.get('client_id')
     request_id = dades.get('request_id')
 
+    compra_ok = False
 
     try:
-        entrades = redisserver.incr("entrades_venudes")
-        if entrades <= LIMIT_ENTRADES:
+        # utilitzem la conexio ja oberta
+        cursor = db_conn.cursor()
+        
+        cursor.execute("""
+            UPDATE concert_config 
+            SET venudes = venudes + 1 
+            WHERE id = 1 AND venudes < %s 
+            RETURNING venudes;
+        """, (LIMIT_ENTRADES,))
+        
+        resultat = cursor.fetchone()
+        if resultat:
             compra_ok = True
-        else:
-            compra_ok = False
+        
+        db_conn.commit()
+        cursor.close()
+        
     except Exception as e:
-        print(f"Error a Redis: {e}")
+        print(f"Error a PostgreSQL: {e}")
+        db_conn.rollback() # fem rollback si error
         compra_ok = False
 
-    #Preparar la resposta per al client
-    resposta = {
+    esdeveniment = {
+        'tipus': 'NO_NUMERADA',
         'client_id': client_id,
         'request_id': request_id,
-        'success': compra_ok
+        'success': compra_ok,
+        'timestamp': time.time()
     }
 
-    #Envia la resposta a la cua temporal del client
     ch.basic_publish(
         exchange='',
-        routing_key=props.reply_to,
+        routing_key=METRICS_QUEUE,
+        body=json.dumps(esdeveniment),
         properties=pika.BasicProperties(
-            correlation_id=props.correlation_id,
-        ),
-        body=json.dumps(resposta)
+            delivery_mode=2,
+        )
     )
 
-    #Confirmar a rabbit que el missatge s'ha processat correctament
     ch.basic_ack(delivery_tag=method.delivery_tag)
 
 def main():
-    #concec rabbit
     connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBIT_HOST))
     channel = connection.channel()
-    #declarem qua principal
-    channel.queue_declare(queue=QUEUE_NAME)
+    
+    channel.queue_declare(queue=QUEUE_NAME, durable=True)
+    channel.queue_declare(queue=METRICS_QUEUE, durable=True)
 
-    #Configurar el qualitiy of service, aixo gestiona quantes peticions s'envien a cada worker de cop
     channel.basic_qos(prefetch_count=100)
 
-    #Indicar a rabbit quina funció ha de processar els missatges
     channel.basic_consume(queue=QUEUE_NAME, on_message_callback=on_request)
-    print("Worker RabbitMQ esperant peticions...")
-    channel.start_consuming()
+    print("Worker PostgreSQL esperant peticions...")
+    
+    try:
+        channel.start_consuming()
+    except KeyboardInterrupt:
+        print("Aturant worker...")
+        db_conn.close() # Tanquem la connexió neta en sortir
 
 if __name__ == '__main__':
     main()

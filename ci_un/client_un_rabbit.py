@@ -1,62 +1,49 @@
 import pika
-import uuid
 import json
 import time
 
-#config
+# config
 RABBIT_HOST = 'localhost'
 QUEUE_NAME = 'cues_compra'
 FITXER_BENCHMARK = "../data/benchmark_unnumbered_20000.txt"
 
-class TicketClientRPC:
+class TicketClientFireAndForget:
     def __init__(self):
-        #Connec a rabbit
+        # Connec a rabbit
         self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBIT_HOST))
         self.channel = self.connection.channel()
 
-        #Declarar la cua temporal per a les respostes
-        result = self.channel.queue_declare(queue='', exclusive=True)
-        self.callback_queue = result.method.queue
+        # Activar Publisher Confirms per garantir que RabbitMQ escriu al disc
+       # self.channel.confirm_delivery()
 
-        #Escoltar la cua de respostes
-        self.channel.basic_consume(
-            queue=self.callback_queue,
-            on_message_callback=self.on_response,
-            auto_ack=True
-        )
+        # Declarar la cua com a persistent (sobreviurà a reinicis del servidor)
+        self.channel.queue_declare(queue=QUEUE_NAME, durable=True)
 
-        self.respostes_rebudes = 0
         self.total_peticions = 0
-        self.exitoses = 0
-
-    def on_response(self, ch, method, props, body):
-        #Callback que s'executa quan el worker respon.
-        dades = json.loads(body)
-        if dades.get('success'):
-            self.exitoses += 1
-        self.respostes_rebudes += 1
 
     def enviar_peticio(self, client_id, request_id):
-        #Envia una única petició a la cua principal.
-        corr_id = str(uuid.uuid4())
+        # Envia una única petició a la cua principal sense esperar resposta
         missatge = {
             'client_id': client_id,
             'request_id': request_id
         }
 
-        self.channel.basic_publish(
-            exchange='',
-            routing_key=QUEUE_NAME,
-            properties=pika.BasicProperties(
-                reply_to=self.callback_queue,
-                correlation_id=corr_id,
-            ),
-            body=json.dumps(missatge)
-        )
-        self.total_peticions += 1
+        try:
+            self.channel.basic_publish(
+                exchange='',
+                routing_key=QUEUE_NAME,
+                body=json.dumps(missatge),
+                properties=pika.BasicProperties(
+                    delivery_mode=2, # Marca el missatge físic com a persistent
+                ),
+                mandatory=True # Força a llançar excepció si la cua no existeix
+            )
+            self.total_peticions += 1
+        except pika.exceptions.UnroutableError:
+            print(f"Error: El missatge de la petició {request_id} no s'ha pogut confirmar al disc.")
 
 def main():
-    client_rpc = TicketClientRPC()
+    client = TicketClientFireAndForget()
 
     try:
         # es llegeix el fitxer
@@ -66,36 +53,29 @@ def main():
         print(f"Error: No es troba el fitxer {FITXER_BENCHMARK}")
         return
 
-    print("Enviant peticions a RabbitMQ...")
+    print("Enviant peticions a RabbitMQ (Mode Fire-and-Forget)...")
     start_time = time.time()
 
-    #enviem les peticions
+    # enviem les peticions
     for line in lines:
         parts = line.strip().split()
         if len(parts) == 3 and parts[0] == 'BUY':
             client_id = parts[1]
             request_id = parts[2]
-            client_rpc.enviar_peticio(client_id, request_id)
-
-    print("Peticions enviades. Esperant respostes...")
-
-    # Bucle d'espera
-    while client_rpc.respostes_rebudes < client_rpc.total_peticions:
-        client_rpc.connection.process_data_events(time_limit=1)
-        #contador
-        print(f"\rProgrés: {client_rpc.respostes_rebudes} / {client_rpc.total_peticions} respostes rebudes...", end="")
-
-    print("\n")
+            client.enviar_peticio(client_id, request_id)
 
     end_time = time.time()
     temps_total = end_time - start_time
-    throughput = client_rpc.total_peticions / temps_total if temps_total > 0 else 0
+    
+    # Aquest throughput només mesura la velocitat d'injecció a la cua, no el processament dels workers
+    throughput = client.total_peticions / temps_total if temps_total > 0 else 0
 
-    print(f"Benchmark finalitzat en {temps_total:.4f} segons.")
-    print(f"Operacions exitoses: {client_rpc.exitoses}/{client_rpc.total_peticions}")
-    print(f"Throughput: {throughput:.2f} ops/seg")
+    print(f"Injecció de càrrega finalitzada en {temps_total:.4f} segons.")
+    print(f"Peticions publicades a la cua persistent: {client.total_peticions}")
+    print(f"Velocitat d'injecció: {throughput:.2f} missatges/seg")
+    print("El client finalitza aquí. El monitor s'encarregarà de calcular les mètriques de processament.")
 
-    client_rpc.connection.close()
+    client.connection.close()
 
 if __name__ == "__main__":
     main()

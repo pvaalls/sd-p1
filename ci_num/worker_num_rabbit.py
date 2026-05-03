@@ -1,72 +1,109 @@
 import pika
-import redis
 import json
+import time
+import psycopg2
 
-#config
+# config RabbitMQ
 RABBIT_HOST = 'localhost'
-REDIS_HOST = 'localhost'
 QUEUE_NAME = 'cues_compra_num'
+METRICS_QUEUE = 'cues_metriques_num'
 
-#connec a Redis
-redisserver = redis.Redis(host=REDIS_HOST, port=6379, db=0, decode_responses=True)
+# config PostgreSQL
+DB_HOST = "localhost"
+DB_NAME = "concerts"
+DB_USER = "postgres"
+DB_PASS = "admin"
+
+# Obrir la connexió global a PostgreSQL
+try:
+    db_conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS)
+    
+    # Desactivar l'escriptura síncrona al disc per millorar operacions per segon
+    cursor_config = db_conn.cursor()
+    cursor_config.execute("SET synchronous_commit = OFF;")
+    cursor_config.close()
+except Exception as e:
+    print(f"Error fatal connectant a PostgreSQL: {e}")
+    exit(1)
 
 def on_request(ch, method, props, body):
     """
-    Callback que processa la validació de cada seient.
+    Callback que processa la validació de cada seient contra PostgreSQL.
     """
-    #Es deserialitza el missatge
     dades = json.loads(body)
     client_id = dades.get('client_id')
     request_id = dades.get('request_id')
     seat_id = dades.get('seat_id')
 
-    #bd
+    compra_ok = False
+
+    # Lògica de base de dades per a concurrència 
     try:
-        #hsetnx retorna 1 si s'insereix -seient lliure-, 0 si ja existeix -seient ocupat-
-        resultat = redisserver.hsetnx("seients_venuts", seat_id, client_id)
+        cursor = db_conn.cursor()
         
-        if resultat == 1:
+        # S'intenta inserir el seient. Si ja existeix, es descarta l'operació i no retorna res.
+        cursor.execute("""
+            INSERT INTO seients_venuts (seat_id, client_id) 
+            VALUES (%s, %s) 
+            ON CONFLICT (seat_id) DO NOTHING 
+            RETURNING seat_id;
+        """, (seat_id, client_id))
+        
+        resultat = cursor.fetchone()
+        
+        # Si la consulta retorna el seat_id, la inserció ha tingut èxit
+        if resultat:
             compra_ok = True
-        else:
-            compra_ok = False
+            
+        db_conn.commit()
+        cursor.close()
             
     except Exception as e:
-        print(f"Error a Redis: {e}")
+        print(f"Error a PostgreSQL: {e}")
+        db_conn.rollback() # Restablir l'estat de la transacció en cas d'error
         compra_ok = False
 
-    #es prepara la resposta
-    resposta = {
+    # Preparar l'esdeveniment per al monitor
+    esdeveniment = {
+        'tipus': 'NUMERADA',
         'client_id': client_id,
         'request_id': request_id,
         'seat_id': seat_id,
-        'success': compra_ok
+        'success': compra_ok,
+        'timestamp': time.time()
     }
 
-    #s'envia la resposta a la cua del client
+    # Enviar a la cua de mètriques
     ch.basic_publish(
         exchange='',
-        routing_key=props.reply_to,
+        routing_key=METRICS_QUEUE,
+        body=json.dumps(esdeveniment),
         properties=pika.BasicProperties(
-            correlation_id=props.correlation_id,
-        ),
-        body=json.dumps(resposta)
+            delivery_mode=2, # Assegurar que la mètrica és persistent
+        )
     )
 
-    # ack del msg
+    #  Confirmar processament a RabbitMQ
     ch.basic_ack(delivery_tag=method.delivery_tag)
 
 def main():
     connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBIT_HOST))
     channel = connection.channel()
 
-    channel.queue_declare(queue=QUEUE_NAME)
+    # Declarar ambdues cues com a persistents
+    channel.queue_declare(queue=QUEUE_NAME, durable=True)
+    channel.queue_declare(queue=METRICS_QUEUE, durable=True)
 
-    #serveix per optimitzar rendiment, quants msg enviem a cada worker cada vegada
     channel.basic_qos(prefetch_count=100)
     channel.basic_consume(queue=QUEUE_NAME, on_message_callback=on_request)
 
-    print("Worker Numerat RabbitMQ esperant peticions...")
-    channel.start_consuming()
+    print("Worker Numerat PostgreSQL esperant peticions...")
+    
+    try:
+        channel.start_consuming()
+    except KeyboardInterrupt:
+        print("\nAturant worker numerat...")
+        db_conn.close() # Tancar connexió de forma segura
 
 if __name__ == '__main__':
-    main()  
+    main()
