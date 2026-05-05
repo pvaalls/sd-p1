@@ -43,8 +43,9 @@ class Worker:
 
         return result
 
+        # Algoritmo de unión de intervalos
     def _tiempo_real_sin_solapamiento(self):
-        """Algoritmo de unión de intervalos"""
+        
         if not self.intervalos:
             return 0.0
 
