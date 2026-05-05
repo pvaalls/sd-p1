@@ -32,7 +32,7 @@ def main():
     parser.add_argument("-p", "--port", type=int, default=9000, help="Port (default: %(default)s)")
     args = parser.parse_args()
 
-    lb_name = "ticket.server.unnumbered"
+    lb_name = "ticket.server.numbered"
 
     daemon  = Pyro5.api.Daemon(host=args.host,port=args.port)
     ns      = Pyro5.api.locate_ns(host=args.ns)
