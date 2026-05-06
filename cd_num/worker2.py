@@ -2,6 +2,7 @@ import Pyro5.api
 import sys
 import signal
 import psycopg2
+from psycopg2.pool import ThreadedConnectionPool
 import argparse
 import time
 import threading
@@ -16,18 +17,18 @@ class Worker:
     def __init__(self, verbose, postgres_host):
         self.vprint = print if verbose else lambda *args, **kwargs: None
 
-        # Conexión a Postgres
-        self.conn = psycopg2.connect(
+        # Pool de conexiones a Postgres
+        self.pool = ThreadedConnectionPool(
+            minconn  = 1,
+            maxconn  = 10,
             host     = postgres_host,
             database = DB_NAME,
             user     = DB_USER,
             password = DB_PASS
         )
 
-
         self.stats_lock = threading.Lock()
         self.total_requests = 0
-        # Guardaremos una lista de tuplas de las peticiones (inicio, fin)
         self.intervalos = []
 
     def comprar_entrada(self, client_id, seat_id, request_id):
@@ -35,10 +36,11 @@ class Worker:
 
         inicio = time.perf_counter()
 
-        try:
-            cursor = self.conn.cursor()
+        conn = self.pool.getconn()
 
-            # S'intenta inserir el seient. Si ja existeix, es descarta l'operació i no retorna res.
+        try:
+            cursor = conn.cursor()
+
             cursor.execute("""
                 INSERT INTO cd_num (seat_id, client_id)
                 VALUES (%s, %s)
@@ -47,29 +49,30 @@ class Worker:
             """, (seat_id, client_id))
 
             result = cursor.fetchone()
-            self.conn.commit()
+            conn.commit()
             cursor.close()
+
         except Exception as e:
             print("Error en Worker:", e)
-            self.conn.rollback()
+            conn.rollback()
             result = False
+
+        finally:
+            # Devolver conexión
+            self.pool.putconn(conn)
 
         fin = time.perf_counter()
 
-        # Guardar Intervalo de esta Petición
         with self.stats_lock:
             self.total_requests += 1
             self.intervalos.append((inicio, fin))
 
         return result
 
-    # Algoritmo de unión de intervalos
     def _tiempo_real_sin_solapamiento(self):
         if not self.intervalos:
             return 0.0
 
-        # 1. Ordenar intervalos por tiempo de inicio
-        # Usamos una copia para no bloquear el procesamiento mientras calculamos
         sorted_intervals = sorted(self.intervalos, key=lambda x: x[0])
 
         if not sorted_intervals:
@@ -80,14 +83,11 @@ class Worker:
 
         for next_start, next_end in sorted_intervals[1:]:
             if next_start <= curr_end:
-                # Hay solapamiento, extendemos el final si es necesario
                 curr_end = max(curr_end, next_end)
             else:
-                # No hay solapamiento, sumamos el tramo anterior y empezamos uno nuevo
                 total_time += curr_end - curr_start
                 curr_start, curr_end = next_start, next_end
 
-        # Sumar el último tramo
         total_time += curr_end - curr_start
         return total_time
 
@@ -96,7 +96,7 @@ class Worker:
             real_time = self._tiempo_real_sin_solapamiento()
             return {
                 "total_requests": self.total_requests,
-                "total_service_time": self._tiempo_real_sin_solapamiento(),
+                "total_service_time": real_time,
             }
 
     def reset_stats(self):
@@ -146,6 +146,12 @@ def main():
             lb.unregister_worker(uri)
         except Exception as e:
             print("Error al desregistrar:", e)
+
+        try:
+            daemon.objectsById["worker"].pool.closeall()
+        except Exception as e:
+            print("Error cerrando pool:", e)
+
         sys.exit(1)
 
     signal.signal(signal.SIGINT, shutdown)
