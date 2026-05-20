@@ -13,10 +13,7 @@ class TicketClientFireAndForget:
         self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBIT_HOST))
         self.channel = self.connection.channel()
 
-        # Activar Publisher Confirms per garantir que RabbitMQ escriu al disc
-       # self.channel.confirm_delivery()
-
-        # Declarar la cua com a persistent (sobreviurà a reinicis del servidor)
+        # Declarar la cua com a persistent
         self.channel.queue_declare(queue=QUEUE_NAME, durable=True)
 
         self.total_peticions = 0

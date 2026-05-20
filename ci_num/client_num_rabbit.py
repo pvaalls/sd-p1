@@ -5,8 +5,8 @@ import time
 # config
 RABBIT_HOST = 'localhost'
 QUEUE_NAME = 'cues_compra_num'
-#FITXER_BENCHMARK = "../data/benchmark_numbered_60000.txt"
-FITXER_BENCHMARK = "../data/benchmark_hotspot_60000.txt"
+FITXER_BENCHMARK = "../data/benchmark_numbered_60000.txt"
+#FITXER_BENCHMARK = "../data/benchmark_hotspot_60000.txt"
 
 class TicketClientFireAndForgetNum:
     def __init__(self):
@@ -48,7 +48,7 @@ def main():
         print(f"Error: No es troba el fitxer {FITXER_BENCHMARK}")
         return
 
-    print("Enviant peticions numerades a RabbitMQ (Mode Fire-and-Forget)...")
+    print("Enviant peticions numerades a RabbitMQ")
     start_time = time.time()
 
     # Enviament de peticions
